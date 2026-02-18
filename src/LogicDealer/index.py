@@ -8,14 +8,10 @@ from dateutil import tz
 
 from assets.const.bot_status import BOT_STATUS
 
+from src.helpers.DiscordManager import DiscordManager
 
 class LogicDealer:
-    """
-
-    This class is responsible to deal with our bot chat actions.
-    It will define what to do when a spawn appears, which poke ball to use and when to speak on chat to keep active for
-    cash earning.
-    """
+    # ...
 
     def __init__(self, logic_config, pokemon_data, last_spawn_data_callback, socket_send_chat_message):
 
@@ -23,8 +19,53 @@ class LogicDealer:
         self._pokemon_data = pokemon_data
         self._spawn_data_callback = last_spawn_data_callback
         self._socket_send_chat_message = socket_send_chat_message
+        
+        self.discord_manager = DiscordManager(logic_config)
 
         self._handle_spawn_thread = Thread()
+
+        self._last_spawn = None
+
+        self._sleep_before_talking = randint(0, 30)  # We use this so we do not talk in chat always at the same time
+        self._last_chat_interaction = None
+    
+    # ...
+
+    def _handle_spawn(self, spawn_data, should_capture):
+        """Handle a pokemon spawn after spawn data has been set"""
+
+        pokemon_data = spawn_data["pokemon_data"]
+
+        # Is it mission?
+        if pokemon_data["tier"] != "S" and self._check_spawn_is_mission(pokemon_data):
+            pokemon_data["tier"] = "M"
+
+        # Is it new?
+        if pokemon_data["pokedex_id"] not in self._pokemon_data.captured["unique_captured_ids"]:
+            pokemon_data["tier"] = f"uncapt_{pokemon_data['tier']}"
+
+        # Discord Notification
+        core_tier = pokemon_data["tier"].replace("uncapt_", "")
+        if core_tier in ["S", "A"]:
+             print(f"High Tier Spawn Detected ({core_tier})! Sending Discord Notification...")
+             # Run in thread? DiscordManager handles threading internally.
+             self.discord_manager.send_spawn_notification(pokemon_data)
+
+        # Which pokeball will we use?
+        chosen_ball = self._choose_capture_ball(pokemon_data) if should_capture else None
+
+        if chosen_ball is not None:
+
+            print(f"A wild {pokemon_data['name']} appeared! Using {chosen_ball} to attempt capture.")
+
+            sleep_before_catch(spawn_data["datetime"], chosen_ball)
+
+            self._send_catch_command(chosen_ball)
+
+            if spawn_data["is_pcg_spawn"]:
+                self._last_spawn["attempt_catch"] = True
+            if self.last_spawn is not None:
+                self._last_spawn["updated_data_after_spawn"] = False
 
         self._last_spawn = None
 
@@ -59,20 +100,8 @@ class LogicDealer:
             self._last_spawn["updated_data_after_spawn"] = True
             self._pokemon_data.update_data()
 
-        if time_to_next_spawn < timedelta(minutes=8, seconds=self._sleep_before_talking) \
-                and not self.last_spawn["talked_in_chat_after_spawn"]:
-            self._last_spawn["talked_in_chat_after_spawn"] = True
-            self._handle_keep_chat_active()
-
-        if time_to_next_spawn < timedelta(seconds=-10):
-            self.investigate_last_spawn(bot_status)
-
-    def _handle_keep_chat_active(self):
-        """Keeps active in chat to receive cash"""
-
-        if self._last_chat_interaction is None or datetime.now() - self._last_chat_interaction > timedelta(minutes=10):
-            message = "$" * randint(1, 3)
-            self._send_chat_message(message)
+    # Removed `_handle_keep_chat_active` as requested by user.
+    # The bot sends !pokecatch every 15 minutes, which is enough to stay active.
 
     def investigate_last_spawn(self, bot_status, chat_message=None):
         """Investigates the last spawn"""
@@ -171,7 +200,7 @@ class LogicDealer:
 
         if chosen_ball is not None:
 
-            print(f"A wild {pokemon_data['name']} appeared! Using {chosen_ball} to attempt capture.")
+            print(f"A wild {pokemon_data['name']} (Tier: {pokemon_data['tier']}) appeared! Using {chosen_ball} to attempt capture.")
 
             sleep_before_catch(spawn_data["datetime"], chosen_ball)
 
@@ -346,6 +375,10 @@ def get_ball_for_type(poke_type):
         return "cipher_ball"
     elif poke_type == "electric" or poke_type == "steel":
         return "magnet_ball"
+    elif poke_type == "dragon" or poke_type == "fairy":
+        return "fantasy_ball"
+    elif poke_type == "rock" or poke_type == "ground":
+        return "geo_ball"
     else:
         return None
 
@@ -357,7 +390,7 @@ def get_ball_for_stats(pokemon_data, stats_balls_config):
         return "heavy_ball"
     elif pokemon_data["weight"] < stats_balls_config["feather_ball"]:
         return "feather_ball"
-    elif pokemon_data["base_hp"] > stats_balls_config["heal_ball"]:
+    elif pokemon_data["base_hp"] >= stats_balls_config["heal_ball"]:
         return "heal_ball"
     elif pokemon_data["base_speed"] > stats_balls_config["fast_ball"]:
         return "fast_ball"

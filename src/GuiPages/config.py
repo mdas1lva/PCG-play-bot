@@ -5,7 +5,7 @@ from PyQt6.QtGui import QIcon, QGuiApplication
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
-from src.TwitchLoginManager.index import WebPageDebugger
+from src.helpers.WebPageDebugger import WebPageDebugger
 from src.helpers.SchemeHandler import QtSchemeHandler
 
 

@@ -124,12 +124,26 @@ config_validator = {
             "validator": {"type": "int", "min": 0, "max": 100}
         },
         "heal_ball": {
-            "default": 150,
+            "default": 100,
             "validator": {"type": "int", "min": 100}
         },
         "fast_ball": {
             "default": 150,
             "validator": {"type": "int", "min": 100}
+        }
+    },
+    "discord": {
+        "enabled": {
+            "default": False,
+            "validator": {"type": "bool"}
+        },
+        "webhook_url": {
+            "default": "",
+            "validator": {"type": "str"}
+        },
+        "ping_user": {
+            "default": False,
+            "validator": {"type": "bool"}
         }
     }
 }

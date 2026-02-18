@@ -48,6 +48,11 @@ const initialState = {
             "feather_ball": 75,
             "heal_ball": 150,
             "fast_ball": 150
+        },
+        "discord": {
+            "enabled": false,
+            "webhook_url": "",
+            "ping_user": false
         }
     }
 }
@@ -62,11 +67,16 @@ const counterReducer = (state = initialState, action) => {
             return {
                 ...state,
                 config: {
-                    ...action.payload,
+                    ...state.config, // Keep existing defaults
+                    ...action.payload, // Overwrite with loaded config
                     "catch": Object.entries(action.payload.catch).reduce((acc, [tier, list]) => {
                         acc[tier] = list.sort();
                         return acc;
-                    }, {})
+                    }, {}),
+                    "discord": {
+                        ...state.config.discord,
+                        ...(action.payload.discord || {})
+                    }
                 }
             }
 

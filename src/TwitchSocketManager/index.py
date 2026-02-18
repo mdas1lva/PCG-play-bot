@@ -1,4 +1,5 @@
 import socket
+import ssl
 from threading import Thread
 from datetime import datetime, timedelta
 
@@ -44,12 +45,15 @@ class TwitchSocketManager:
         try:
             self._socket.close()
             self._socket = socket.socket()
+            context = ssl.create_default_context()
+            self._socket = context.wrap_socket(self._socket, server_hostname=TWITCH_CHAT_SERVER)
             self._socket.setblocking(True)
-            self._socket.connect((TWITCH_CHAT_SERVER, TWITCH_CHAT_PORT))
+            self._socket.connect((TWITCH_CHAT_SERVER, 6697))
 
-        except socket.gaierror as error:
+        except (socket.gaierror, OSError) as error:
             print("Socket connection error:\n", error)
             self._error_callback()
+            return
 
         self._socket.send(f'PASS {user_data.oauth}\nNICK {user_data.username}\n Join #{channel_name}\n'.encode())
 
@@ -82,7 +86,7 @@ class TwitchSocketManager:
                         print("Twitch authentication failed.")
                         return self._on_disconnect()
 
-            except BlockingIOError:
+            except (BlockingIOError, ssl.SSLWantReadError, ssl.SSLWantWriteError):
                 continue
 
         self._on_connect()
@@ -132,7 +136,7 @@ class TwitchSocketManager:
                         except IndexError:
                             print("Index Error:", line)
 
-            except BlockingIOError:
+            except (BlockingIOError, ssl.SSLWantReadError, ssl.SSLWantWriteError):
                 continue
 
             except OSError:

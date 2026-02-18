@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from json import dumps
 
 from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import pyqtSignal
 
 from src.GuiPages.alert import AlertPage
 from src.GuiPages.config import ConfigPage
@@ -21,14 +22,19 @@ from assets.const.connection_status import CONNECTION_STATUS
 
 class MainApplication(QWidget):
     """
-
-    This ou application core.
+    This is our application core.
     It coordinates app actions, and connects different classes.
     """
+    
+    # Thread-safe signals
+    pokemon_data_updated_signal = pyqtSignal()
 
     def __init__(self, program_path):
 
         super().__init__()
+        
+        # Connect signals
+        self.pokemon_data_updated_signal.connect(self._on_pokemon_data_updated_slot)
 
         self._program_path = program_path
 
@@ -60,6 +66,7 @@ class MainApplication(QWidget):
         self.PokemonData = PokemonData(
             self.poke_data_update_callback,
             self.poke_data_error_callback,
+            self.TwitchLoginManager.browser_service
         )
 
         self.LogicDealer = LogicDealer(
@@ -75,7 +82,7 @@ class MainApplication(QWidget):
             self.on_home_close_callback,
             self.change_bot_status,
             self.open_config,
-            self.TwitchLoginManager.request_twitch_login,
+            self.request_twitch_login, # Link to Main App wrapper, NOT Manager directly
             self.twitch_logout,
         )
 
@@ -149,6 +156,11 @@ class MainApplication(QWidget):
                 self._connect_chat(self.LogicConfig.channel)
 
     ### Actions ###
+
+    def request_twitch_login(self):
+        """User requested login via GUI button."""
+        print("GUI: User requested Login. Setting status to LOADING.")
+        self._get_twitch_oauth()
 
     def _get_twitch_oauth(self):
         """Get Twitch oAuth code to connect via chat"""
@@ -232,7 +244,8 @@ class MainApplication(QWidget):
 
         # print(connection_data)
 
-        if not connection_data["oauth"] or not connection_data["username"]:
+        if not connection_data["username"]:
+            print("Login Error: Missing username.")
             self.connection_status = CONNECTION_STATUS["DISCONNECTED"]
             self.user_data = None
             self.TwitchLoginManager.clear_cookies()
@@ -258,7 +271,9 @@ class MainApplication(QWidget):
             self.poke_jwt = PokeJwt(encoded_jwt)
             self._get_pokemon_user_data()
 
-            if self.connection_status == CONNECTION_STATUS["GETTING_JWT"]:
+            # Relaxed state check: If we got a JWT, we are functionally connected.
+            # We don't want to be stuck in LOADING or DISCONNECTED if a race condition happened.
+            if self.connection_status in [CONNECTION_STATUS["GETTING_JWT"], CONNECTION_STATUS["LOADING"], CONNECTION_STATUS["DISCONNECTED"]]:
                 if not self.TwitchSocketManager.connected:
                     self._connect_chat(self.LogicConfig.channel)
                 else:
@@ -287,6 +302,9 @@ class MainApplication(QWidget):
         self.user_data = None
         self.poke_jwt = None
         self.TwitchLoginManager.clear_cookies()
+        
+        # Stop the bot if authentication fails
+        self.bot_status = BOT_STATUS["STOPPED"]
 
         self.connection_status = CONNECTION_STATUS["ERROR"]
 
@@ -317,21 +335,36 @@ class MainApplication(QWidget):
 
     def poke_data_update_callback(self):
         """Callback used to sync GUI pokemon data with fetched from server"""
+        # This is called from a background thread, so we must EMIT a signal
+        # to update the UI on the main thread.
+        # print("Pokemon data updated (Background).") 
+        self.pokemon_data_updated_signal.emit()
 
-        print("Pokemon data updated.")
+    def _on_pokemon_data_updated_slot(self):
+        """Slot to update UI on Main Thread"""
+        print("Pokemon data updated (Main Thread).")
+        
+        # Always update data if we have it, regardless of connection status flag.
+        # This prevents UI staleness if the status flag lags behind.
+        self.HomePage.update_pokemon_data(dumps({
+            "captured": self.PokemonData.captured,
+            "pokedex": self.PokemonData.pokedex,
+            "inventory": self.PokemonData.inventory,
+            "missions": self.PokemonData.missions,
+        }))
 
-        if self.connection_status != CONNECTION_STATUS["DISCONNECTED"]:
-            self.HomePage.update_pokemon_data(dumps({
-                "captured": self.PokemonData.captured,
-                "pokedex": self.PokemonData.pokedex,
-                "inventory": self.PokemonData.inventory,
-                "missions": self.PokemonData.missions,
-            }))
-
-    def poke_data_error_callback(self):
-        """Callback when a request to pokemon API returns error. Try to reload JWT"""
-
-        self._get_twitch_jwt()
+    def poke_data_error_callback(self, error_code=None):
+        """Callback when a request to pokemon API returns error."""
+        print(f"Error fetching Pokemon Data (Code: {error_code}).")
+        
+        # Handle Token Expiration
+        if error_code == -24 or error_code == 401:
+             print("Token Expired or Invalid. Triggering Refresh...")
+             # Avoid recursion: Check if we are already getting JWT
+             if self.connection_status != CONNECTION_STATUS["GETTING_JWT"]:
+                 self._get_twitch_jwt()
+             else:
+                 print("Already refreshing JWT. Ignoring error.")
 
     def last_spawn_data_callback(self, spawn_data):
         """Callback used to sync GUI last spawn data with detected from logic"""
@@ -352,7 +385,7 @@ class MainApplication(QWidget):
 
         self._start_main_worker()
 
-        self.AlertPage.open()
+        # self.AlertPage.open() # Disabled per user request
 
     def on_home_close_callback(self):
         """Callback used on home page close to finish app"""

@@ -66,3 +66,15 @@ class LogicConfig(QObject):
     @property
     def stats_balls(self):
         return self.config["stats_balls"]
+
+    @property
+    def discord_enabled(self):
+        return self.config.get("discord", {}).get("enabled", False)
+
+    @property
+    def discord_webhook_url(self):
+        return self.config.get("discord", {}).get("webhook_url", "")
+    
+    @property
+    def discord_ping_user(self):
+        return self.config.get("discord", {}).get("ping_user", False)

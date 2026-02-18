@@ -245,3 +245,7 @@ src/web/GuiPages/lib/redux.js
 
 conf.json
 build_command.txt
+browser_profile
+browser_state.json
+debug_*
+current_index.js

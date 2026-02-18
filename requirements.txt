@@ -2,3 +2,4 @@ PyQt6==6.7.1
 PyQt6-WebEngine==6.7.0
 python-dateutil~=2.9.0
 requests==2.32.3
+playwright==1.49.0

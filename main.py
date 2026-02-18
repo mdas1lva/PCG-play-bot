@@ -1,10 +1,18 @@
 import sys
 from os import path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from PyQt6.QtWebEngineCore import QWebEngineUrlScheme
 from PyQt6.QtWidgets import QApplication
 
 from src.MainApplication.index import MainApplication
+import os
+
+# Fix for Wayland/GPU issues
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
 
 
 def except_hook(cls, exception, traceback):
