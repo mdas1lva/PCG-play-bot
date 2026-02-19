@@ -1,4 +1,4 @@
-const LanguageAndChannel = ({languageConfig, setLanguageConfig, channel, setChannel}) => {
+const LanguageAndChannel = ({ languageConfig, setLanguageConfig, themeConfig, setThemeConfig, channel, setChannel }) => {
 
     const language = useLanguage()
     const languageText = language.LANGUAGE
@@ -9,6 +9,11 @@ const LanguageAndChannel = ({languageConfig, setLanguageConfig, channel, setChan
     const handleLanguageChange = (e) => {
         const inputValue = e.target.value;
         setLanguageConfig(inputValue);
+    };
+
+    const handleThemeChange = (e) => {
+        const inputValue = e.target.value;
+        setThemeConfig(inputValue);
     };
 
     const handleChannelChange = (e) => {
@@ -33,6 +38,19 @@ const LanguageAndChannel = ({languageConfig, setLanguageConfig, channel, setChan
                     <option value={"pt-br"}>{languageText.PT_BR}</option>
                     <option value={"es-la"}>{languageText.ES_LA}</option>
                     <option value={"en-us"}>{languageText.EN_US}</option>
+                </select>
+
+            </label>
+
+            <label className={"language-label"}>
+
+                <span className={"category-title language-channel-title"}>Theme</span>
+
+                <select className={"language-select"} value={themeConfig} onChange={handleThemeChange}>
+                    <option value={"mocha"}>Mocha</option>
+                    <option value={"macchiato"}>Macchiato</option>
+                    <option value={"frappe"}>Frappé</option>
+                    <option value={"latte"}>Latte</option>
                 </select>
 
             </label>

@@ -83,7 +83,7 @@ const Header = () => {
                         className={`control-button pause-button control-button-${botStatus === "ACTIVE" ? "active" : "inactive"}`}
                         onClick={() => botStatus === "ACTIVE" && handleChangeBotStatus("PAUSED")}
                     >
-                        <span className={"pause-button-icon"}/>
+                        <span className={"pause-button-icon"} />
                     </button>
 
                     <button
@@ -91,7 +91,7 @@ const Header = () => {
                         className={`control-button play-button control-button-${botStatus !== "ACTIVE" ? "active" : "inactive"}`}
                         onClick={() => botStatus !== "ACTIVE" && handleChangeBotStatus("ACTIVE")}
                     >
-                        <span className={"play-button-icon"}/>
+                        <span className={"play-button-icon"} />
                     </button>
 
                     <button
@@ -99,7 +99,7 @@ const Header = () => {
                         className={`control-button stop-button control-button-${botStatus !== "STOPPED" ? "active" : "inactive"}`}
                         onClick={() => botStatus !== "STOPPED" && handleChangeBotStatus("STOPPED")}
                     >
-                        <span className={"stop-button-icon"}/>
+                        <span className={"stop-button-icon"} />
                     </button>
 
                 </div>

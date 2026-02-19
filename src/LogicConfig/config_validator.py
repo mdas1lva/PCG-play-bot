@@ -39,6 +39,10 @@ config_validator = {
         "default": "pt-br",
         "validator": {"type": "str", "accepted_values": ["pt-br", "es-la", "en-us"]}
     },
+    "theme": {
+        "default": "mocha",
+        "validator": {"type": "str", "accepted_values": ["mocha", "macchiato", "frappe", "latte"]}
+    },
     "channel": {
         "default": "deemonrider",
         "validator": {"type": "str"}

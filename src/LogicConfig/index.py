@@ -21,6 +21,8 @@ class LogicConfig(QObject):
         self._update_language_callback = update_language_callback
         self._update_channel_callback = update_channel_callback
 
+        self.theme_callback = None
+
         self.config = dict()
 
         self.load()
@@ -45,11 +47,18 @@ class LogicConfig(QObject):
         if new_config["channel"] != self.config["channel"]:
             self._update_channel_callback(new_config["channel"])
 
+        if new_config.get("theme") != self.config.get("theme") and self.theme_callback:
+            self.theme_callback(new_config["theme"])
+
         self.config = new_config
 
     @property
     def language(self):
         return self.config["language"]
+
+    @property
+    def theme(self):
+        return self.config.get("theme", "mocha")
 
     @property
     def channel(self):

@@ -114,6 +114,9 @@ class HomePage(QWebEngineView):
     def update_language(self, new_value):
         self._invoke_update_store(f"runSetLanguage('{new_value}')")
 
+    def update_theme(self, new_value):
+        self._invoke_update_store(f"runSetTheme('{new_value}')")
+
     def update_username(self, new_value):
         self._invoke_update_store(f"runSetUsername('{new_value}')")
 

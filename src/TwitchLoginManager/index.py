@@ -1,13 +1,12 @@
-from threading import Thread
+import asyncio
 import time
 from os import getenv
-from PyQt6.QtCore import QObject, pyqtSlot
 from src.helpers.BrowserService import BrowserService
 from assets.const.urls import TWITCH_URL, TWITCH_OAUTH_URL
 
-class TwitchLoginManager(QObject):
+class TwitchLoginManager:
     """
-    Manages Twitch login using Playwright via BrowserService.
+    Manages Twitch login using Playwright via BrowserService asynchronously.
     Retrieves OAuth token and Pokemon API JWT.
     """
 
@@ -20,7 +19,6 @@ class TwitchLoginManager(QObject):
                  twitch_error_callback,
                  ):
 
-        super().__init__()
         self._program_path = program_path
         self._connection_status_callback = twitch_connection_status_callback
         self._update_jwt_callback = twitch_update_jwt_callback
@@ -30,6 +28,9 @@ class TwitchLoginManager(QObject):
 
         self.browser_service = BrowserService()
         self._captured_display_name = ""
+
+        self._login_task = None
+        self._refresh_task = None
 
     def check_env_login(self):
         """Checks if login credentials are in environment variables"""
@@ -50,32 +51,27 @@ class TwitchLoginManager(QObject):
         return False
 
     def start_get_twitch_oauth_process(self):
-        """Starts the login process via Playwright."""
+        """Starts the login process via async Playwright."""
         if self.check_env_login():
-             # Even if we have env login, we might need the browser for fetching data later.
-             # But for now, let's assume if env is present, we are good.
              return
 
-        Thread(target=self._run_browser_login).start()
+        if self._login_task is None or self._login_task.done():
+            self._login_task = asyncio.create_task(self._run_browser_login())
 
-    def _run_browser_login(self):
-        """Runs the browser login flow in a separate thread."""
+    async def _run_browser_login(self):
+        """Runs the browser login flow in a single async task."""
         try:
             print("Starting Browser Login Flow...")
-            page = self.browser_service.login() 
+            await self.browser_service.login() 
             
-            # 1. Wait for Login
-            # We assume user logs in. We can check for a specific cookie or element.
-            # Simple check: url changes to twitch.tv (home) or dashboard
             print("Waiting for user to login...")
             
-            # Poll for login success (e.g. check for auth-token cookie)
             logged_in = False
             for _ in range(120): # Wait up to 2 minutes
-                if self.browser_service.is_logged_in():
+                if await self.browser_service.is_logged_in():
                     logged_in = True
                     break
-                time.sleep(1)
+                await asyncio.sleep(1)
             
             if not logged_in:
                 print("Login timed out or failed.")
@@ -85,25 +81,18 @@ class TwitchLoginManager(QObject):
             print("Login detected! Fetching credentials...")
             self._login_success_callback()
             
-            # 2. Get OAuth Token (for Chat)
-            # Navigate to twitchapps.com/tmi/
-            print("Fetching OAuth Token...")
-            # 2. Get Username and OAuth from Cookies
             print("Fetching Credentials from cookies...")
-            cookies = self.browser_service.get_cookies()
+            cookies = await self.browser_service.get_cookies()
             username = next((c['value'] for c in cookies if c['name'] == 'name' or c['name'] == 'login'), "unknown_user")
             
-            # Extract auth-token for Chat
             auth_token = next((c['value'] for c in cookies if c['name'] == 'auth-token'), None)
             
-            # Prefer Env Token if present, otherwise use Cookie Token
             env_oauth = getenv("TWITCH_OAUTH_TOKEN")
             if env_oauth:
                 print("Using OAuth token from env.")
                 final_oauth = env_oauth
             elif auth_token:
                 print("Using 'auth-token' cookie as OAuth token.")
-                # Ensure it starts with "oauth:" (IRC standard)
                 if not auth_token.startswith("oauth:"):
                     final_oauth = f"oauth:{auth_token}"
                 else:
@@ -117,29 +106,23 @@ class TwitchLoginManager(QObject):
                 "oauth": final_oauth, 
             })
 
-            # 3. Get Pokemon JWT
             target_channel = getenv("TWITCH_CHANNEL", getenv("TWITCH_USERNAME"))
             print(f"Fetching Pokemon JWT from channel: {target_channel}...")
             print("!!! PLEASE NAVIGATE TO THE TARGET CHANNEL IF NOT ALREADY THERE !!!")
             
-            # Use the new helper method in BrowserService
-            # We filter by the domain 'poketwitch.bframework.de' to catch ANY extension call
-            # We set navigate_url=None to let the user navigate, preventing cookie invalidation.
-            jwt = self.browser_service.capture_request_header(
+            jwt = await self.browser_service.capture_request_header(
                 navigate_url=None, 
                 url_filter="poketwitch.bframework.de",
                 header_name="authorization", 
-                timeout=60 # Give user time to navigate
+                timeout=60.0
             ) 
             
-            # Playwright header keys might be lowercased automatically. 
-            # If not found, try "Authorization" (Title case)
             if not jwt:
-                jwt = self.browser_service.capture_request_header(
+                jwt = await self.browser_service.capture_request_header(
                     navigate_url=None,
                     url_filter="poketwitch.bframework.de",
                     header_name="Authorization",
-                    timeout=10 # Short timeout for second check
+                    timeout=10.0
                 )
                 
             if jwt:
@@ -154,51 +137,39 @@ class TwitchLoginManager(QObject):
 
     def get_twitch_jwt(self):
         """Called when JWT needs refresh."""
-        # Check env first
         if self.check_env_login():
             return
             
         print("Refreshing Pokemon JWT via Browser Reload...")
-        # 1. Reload the page
-        self.browser_service.reload_page()
         
-        # 2. Wait for new JWT
-        # We need to run this in a thread or ensure capture_request_header doesn't block the UI thread if called from Main Thread
-        # But get_twitch_jwt is called from MainApplication, so blocking here blocks the UI.
-        # Ideally, this should be async or run in a thread.
-        # MainApplication calls this: self.TwitchLoginManager.get_twitch_jwt() inside _get_twitch_jwt() inside main_thread() ??
-        # No, _get_twitch_jwt() is triggered by timer.
-        # If we block here, the GUI freezes.
-        # We should start a thread here.
-        
-        Thread(target=self._refresh_jwt_background).start()
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = asyncio.create_task(self._refresh_jwt_background())
 
-    def _refresh_jwt_background(self):
-        """Background thread for refreshing JWT"""
+    async def _refresh_jwt_background(self):
+        """Async task for refreshing JWT"""
         try:
-            # Attempt 1
-            jwt = self._attempt_capture_jwt(timeout=45)
+            await self.browser_service.reload_page()
+            
+            jwt = await self._attempt_capture_jwt(timeout=45.0)
             
             if not jwt:
                 print("JWT Capture failed on first attempt. Checking for interruptions...")
-                # Check for "Start Watching" or "Mature" content buttons that block the player
-                # We need to run these checks on the worker thread
-                clicked = self.browser_service._execute_on_worker(lambda: self._handle_stream_interruptions())
+                clicked = await self._handle_stream_interruptions()
                 
                 if clicked:
                     print("Interruption handled. Waiting for JWT again...")
-                    jwt = self.browser_service.capture_request_header(
+                    jwt = await self.browser_service.capture_request_header(
                         navigate_url=None, 
                         url_filter="poketwitch.bframework.de",
                         header_name="authorization", 
-                        timeout=30
+                        timeout=30.0
                     )
             
             if not jwt:
                  print("JWT Capture still failed. Retrying Reload (Attempt 2)...")
-                 self.browser_service.reload_page()
-                 time.sleep(5)
-                 jwt = self._attempt_capture_jwt(timeout=45)
+                 await self.browser_service.reload_page()
+                 await asyncio.sleep(5)
+                 jwt = await self._attempt_capture_jwt(timeout=45.0)
 
             if jwt:
                  print("Refreshed JWT captured!")
@@ -211,34 +182,29 @@ class TwitchLoginManager(QObject):
             print(f"Error refreshing JWT: {e}")
             self._error_callback()
 
-    def _attempt_capture_jwt(self, timeout):
+    async def _attempt_capture_jwt(self, timeout):
         """Helper to capture JWT with primary and fallback headers"""
-        jwt = self.browser_service.capture_request_header(
+        jwt = await self.browser_service.capture_request_header(
              navigate_url=None,
              url_filter="poketwitch.bframework.de",
              header_name="authorization", 
              timeout=timeout
         )
         if not jwt:
-            jwt = self.browser_service.capture_request_header(
+            jwt = await self.browser_service.capture_request_header(
                  navigate_url=None,
                  url_filter="poketwitch.bframework.de",
                  header_name="Authorization",
-                 timeout=10
+                 timeout=10.0
             )
         return jwt
 
-    def _handle_stream_interruptions(self):
-        """
-        Checks for common stream interruptions (Mature content warning, 'Start Watching') 
-        and clicks them to resume playback/loading extensions.
-        RUN THIS ON WORKER THREAD.
-        """
+    async def _handle_stream_interruptions(self):
+        """Checks for common stream interruptions and clicks them via playwright."""
         page = self.browser_service._page
         if not page: return False
         
         clicked = False
-        # Selectors for "Start Watching" or "Agree to Mature" buttons
         interruption_selectors = [
             '[data-a-target="player-overlay-mature-accept"]', 
             '[data-a-target="content-classification-gate-overlay-start-watching-button"]',
@@ -247,11 +213,11 @@ class TwitchLoginManager(QObject):
         ]
         
         for selector in interruption_selectors:
-            if page.is_visible(selector):
+            if await page.is_visible(selector):
                 print(f"Found interruption button: {selector}. Clicking...")
-                page.click(selector)
+                await page.click(selector)
                 clicked = True
-                time.sleep(2) # Wait for click effect
+                await asyncio.sleep(2)
         
         return clicked
 
@@ -259,9 +225,12 @@ class TwitchLoginManager(QObject):
         """User requested manual login."""
         self.start_get_twitch_oauth_process()
 
+    async def close_web_async(self):
+        await self.browser_service.stop()
+
     def close_web(self):
-        self.browser_service.stop()
+        # Fallback if called synchronously
+        asyncio.create_task(self.close_web_async())
         
-    def clear_cookies(self):
-        """Clears browser cookies."""
-        self.browser_service.clear_cookies()
+    async def clear_cookies(self):
+        await self.browser_service.clear_cookies()

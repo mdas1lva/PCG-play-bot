@@ -1,6 +1,7 @@
 // Redux Actions
 const ACTIONS = {
     SET_LANGUAGE: "SET_LANGUAGE",
+    SET_THEME: "SET_THEME",
     SET_CONNECTION_STATUS: "SET_CONNECTION_STATUS",
     SET_BOT_STATUS: "SET_BOT_STATUS",
     SET_USERNAME: "SET_USERNAME",
@@ -13,6 +14,11 @@ const ACTIONS = {
 const setLanguage = (language) => ({
     type: ACTIONS.SET_LANGUAGE,
     payload: language,
+});
+
+const setTheme = (theme) => ({
+    type: ACTIONS.SET_THEME,
+    payload: theme,
 });
 
 const setConnectionStatus = (status) => ({
@@ -55,6 +61,7 @@ const initialState = {
     connectionStatus: "STARTING",
     botStatus: "ACTIVE",
     language: "pt-br",
+    theme: "mocha",
     username: "",
     joinedChat: "",
     lastSpawn: {
@@ -91,25 +98,28 @@ const counterReducer = (state = initialState, action) => {
     switch (action.type) {
 
         case ACTIONS.SET_CONNECTION_STATUS:
-            return {...state, connectionStatus: action.payload}
+            return { ...state, connectionStatus: action.payload }
 
         case ACTIONS.SET_BOT_STATUS:
-            return {...state, botStatus: action.payload}
+            return { ...state, botStatus: action.payload }
 
         case ACTIONS.SET_LANGUAGE:
-            return {...state, language: action.payload}
+            return { ...state, language: action.payload }
+
+        case ACTIONS.SET_THEME:
+            return { ...state, theme: action.payload }
 
         case ACTIONS.SET_USERNAME:
-            return {...state, username: action.payload}
+            return { ...state, username: action.payload }
 
         case ACTIONS.SET_JOINED_CHAT:
-            return {...state, joinedChat: action.payload}
+            return { ...state, joinedChat: action.payload }
 
         case ACTIONS.SET_LAST_SPAWN:
-            return {...state, lastSpawn: action.payload}
+            return { ...state, lastSpawn: action.payload }
 
         case ACTIONS.SET_POKEMON_DATA:
-            return {...state, pokemonData: action.payload}
+            return { ...state, pokemonData: action.payload }
 
         case ACTIONS.RESET_POKEMON_DATA:
             return {

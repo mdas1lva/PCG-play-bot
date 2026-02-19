@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from json import dumps
+import asyncio
 
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import pyqtSignal
@@ -14,7 +15,6 @@ from src.TwitchLoginManager.index import TwitchLoginManager
 from src.TwitchSocketManager.index import TwitchSocketManager
 from src.helpers.PokeJwt import PokeJwt
 from src.helpers.UserData import UserData
-from src.helpers.Worker import Worker
 
 from assets.const.bot_status import BOT_STATUS
 from assets.const.connection_status import CONNECTION_STATUS
@@ -22,18 +22,16 @@ from assets.const.connection_status import CONNECTION_STATUS
 
 class MainApplication(QWidget):
     """
-    This is our application core.
+    This is our application core using asyncio.
     It coordinates app actions, and connects different classes.
     """
     
-    # Thread-safe signals
     pokemon_data_updated_signal = pyqtSignal()
 
     def __init__(self, program_path):
 
         super().__init__()
         
-        # Connect signals
         self.pokemon_data_updated_signal.connect(self._on_pokemon_data_updated_slot)
 
         self._program_path = program_path
@@ -46,6 +44,7 @@ class MainApplication(QWidget):
             self.update_language_callback,
             self.update_channel_callback
         )
+        self.LogicConfig.theme_callback = self.update_theme_callback
 
         self.TwitchLoginManager = TwitchLoginManager(
             self._program_path,
@@ -82,7 +81,7 @@ class MainApplication(QWidget):
             self.on_home_close_callback,
             self.change_bot_status,
             self.open_config,
-            self.request_twitch_login, # Link to Main App wrapper, NOT Manager directly
+            self.request_twitch_login, 
             self.twitch_logout,
         )
 
@@ -97,33 +96,37 @@ class MainApplication(QWidget):
             self.on_alert_load_callback,
         )
 
-        self._main_worker = Worker(1000)
-
         self._user_data = None
         self._poke_jwt = None
 
         self._time_out_error = None
         self._socket_error = None
 
+        self._main_task = None
+        self._is_running = True
+
         self.init_gui()
 
     def init_gui(self):
         """Initializes app home page"""
-
         self.HomePage.init()
 
-    def _start_main_worker(self):
-        """Starts main worker"""
+    async def run(self):
+        """Main async entry point called by main.py"""
+        self._is_running = True
+        self._main_task = asyncio.create_task(self._main_loop())
+        
+        while self._is_running:
+             await asyncio.sleep(1)
 
-        self.main_thread()
+    async def _main_loop(self):
+        """Main loop that replaces Worker"""
+        while self._is_running:
+            await self._main_tick()
+            await asyncio.sleep(1)
 
-        if not self._main_worker.is_working:
-            self._main_worker.signal.connect(self.main_thread)
-            self._main_worker.start_timer()
-
-    def main_thread(self):
-        """Main thread that will be run by worker"""
-
+    async def _main_tick(self):
+        """Single iteration of the main loop logic"""
         if self.connection_status == CONNECTION_STATUS["DISCONNECTED"] or \
                 self.connection_status == CONNECTION_STATUS["ERROR"] or \
                 self.bot_status == BOT_STATUS["STOPPED"]:
@@ -134,17 +137,14 @@ class MainApplication(QWidget):
 
         elif self.connection_status == CONNECTION_STATUS["CONNECTED"]:
 
-            # Refresh pokemon JWT before it expires
             if self.poke_jwt is None or self.poke_jwt.exp - datetime.now() < timedelta(minutes=10):
                 self._get_twitch_jwt()
                 return
 
-            # Keeps socket connected
             if not self.TwitchSocketManager.connected:
                 self._connect_chat(self.LogicConfig.channel)
                 return
 
-            # Executes spawn routine
             self.LogicDealer.spawn_routine(self.bot_status)
 
         elif self.connection_status == CONNECTION_STATUS["TIMEOUT"]:
@@ -155,65 +155,46 @@ class MainApplication(QWidget):
             if datetime.now() - self._socket_error > timedelta(seconds=15):
                 self._connect_chat(self.LogicConfig.channel)
 
-    ### Actions ###
-
     def request_twitch_login(self):
-        """User requested login via GUI button."""
         print("GUI: User requested Login. Setting status to LOADING.")
         self._get_twitch_oauth()
 
     def _get_twitch_oauth(self):
-        """Get Twitch oAuth code to connect via chat"""
-
         if self.bot_status != BOT_STATUS["STOPPED"]:
             self.connection_status = CONNECTION_STATUS["LOADING"]
             self.TwitchLoginManager.start_get_twitch_oauth_process()
 
     def _get_twitch_jwt(self):
-        """Updates Twitch JWT for pokemon API"""
-
         if self.bot_status != BOT_STATUS["STOPPED"] and self.connection_status != CONNECTION_STATUS["GETTING_JWT"]:
             self.connection_status = CONNECTION_STATUS["GETTING_JWT"]
             self.TwitchLoginManager.get_twitch_jwt()
 
     def _connect_chat(self, channel):
-        """Creates a new socket connection to a Twitch chat"""
-
         if self.user_data is not None and self.bot_status != BOT_STATUS["STOPPED"]:
             self.connection_status = CONNECTION_STATUS["CONNECTING_SOCKET"]
             self.TwitchSocketManager.connect(self.user_data, channel)
 
     def _get_pokemon_user_data(self):
-        """Updates user data from pokemon API"""
-
         if self.bot_status != BOT_STATUS["STOPPED"]:
             self.PokemonData.update_data()
 
-    ### Public actions ###
 
     def change_bot_status(self, new_status):
-        """Changes bot status"""
-
         if new_status == BOT_STATUS["STOPPED"]:
             self.TwitchSocketManager.disconnect()
 
         if self.bot_status == BOT_STATUS["STOPPED"] and new_status != BOT_STATUS["STOPPED"]:
             self.connection_status = CONNECTION_STATUS["STARTING"]
-            self.main_thread()
 
         self.bot_status = new_status
 
     def open_config(self):
-        """Opens config page"""
-
         self.ConfigPage.open()
 
     def twitch_logout(self):
-        """Logs out from Twitch"""
-
         self.connection_status = CONNECTION_STATUS["DISCONNECTED"]
-
-        self.TwitchLoginManager.clear_cookies()
+        
+        asyncio.create_task(self.TwitchLoginManager.clear_cookies())
         self.user_data = None
         self.poke_jwt = None
 
@@ -221,17 +202,15 @@ class MainApplication(QWidget):
 
         self.HomePage.reset_pokemon_data()
 
-    ### Callbacks ###
 
     def update_language_callback(self, new_language):
-        """Callback used when a new language config is set"""
-
         self.HomePage.update_language(new_language)
         self.AlertPage.update_language(new_language)
 
-    def update_channel_callback(self, new_channel):
-        """Callback used when a new channel config is set"""
+    def update_theme_callback(self, new_theme):
+        self.HomePage.update_theme(new_theme)
 
+    def update_channel_callback(self, new_channel):
         if self.connection_status == CONNECTION_STATUS["CONNECTED"]:
             self.connection_status = CONNECTION_STATUS["CONNECTING_SOCKET"]
             self.TwitchSocketManager.disconnect()
@@ -240,39 +219,27 @@ class MainApplication(QWidget):
         self.HomePage.update_joined_chat(new_channel)
 
     def twitch_connection_status_callback(self, connection_data):
-        """Callback used when a Twitch login or logout state is detected"""
-
-        # print(connection_data)
-
         if not connection_data["username"]:
             print("Login Error: Missing username.")
             self.connection_status = CONNECTION_STATUS["DISCONNECTED"]
             self.user_data = None
-            self.TwitchLoginManager.clear_cookies()
+            asyncio.create_task(self.TwitchLoginManager.clear_cookies())
             self.TwitchSocketManager.disconnect()
-
         else:
             self.user_data = UserData(connection_data)
             self._get_twitch_jwt()
 
     def twitch_update_jwt_callback(self, encoded_jwt):
-        """Callback used when a Twitch new pokemon API JWT data is retrieved"""
-
-        # print(encoded_jwt)
-
         if self.connection_status == CONNECTION_STATUS["ERROR"]:
             return
 
         if not encoded_jwt:
             self.poke_jwt = None
             return
-
         else:
             self.poke_jwt = PokeJwt(encoded_jwt)
             self._get_pokemon_user_data()
 
-            # Relaxed state check: If we got a JWT, we are functionally connected.
-            # We don't want to be stuck in LOADING or DISCONNECTED if a race condition happened.
             if self.connection_status in [CONNECTION_STATUS["GETTING_JWT"], CONNECTION_STATUS["LOADING"], CONNECTION_STATUS["DISCONNECTED"]]:
                 if not self.TwitchSocketManager.connected:
                     self._connect_chat(self.LogicConfig.channel)
@@ -280,13 +247,9 @@ class MainApplication(QWidget):
                     self.connection_status = CONNECTION_STATUS["CONNECTED"]
 
     def twitch_login_success_callback(self):
-        """Callback used when user successfully login to Twitch"""
-
         self.connection_status = CONNECTION_STATUS["LOADING"]
 
     def twitch_connection_timeout_callback(self):
-        """Callback used when an attempt to connect to Twitch times out"""
-
         if self.connection_status == CONNECTION_STATUS["LOADING"]:
             self.user_data = None
             self.poke_jwt = None
@@ -297,55 +260,36 @@ class MainApplication(QWidget):
         self.connection_status = CONNECTION_STATUS["TIMEOUT"]
 
     def twitch_error_callback(self):
-        """Callback used when an attempt to connect to Twitch returns error"""
-
         self.user_data = None
         self.poke_jwt = None
-        self.TwitchLoginManager.clear_cookies()
+        asyncio.create_task(self.TwitchLoginManager.clear_cookies())
         
-        # Stop the bot if authentication fails
         self.bot_status = BOT_STATUS["STOPPED"]
-
         self.connection_status = CONNECTION_STATUS["ERROR"]
 
     def chat_connection_callback(self):
-        """Callback used when a new socket connection is created"""
-
         if self.connection_status == CONNECTION_STATUS["CONNECTING_SOCKET"]:
             self.connection_status = CONNECTION_STATUS["CONNECTED"]
 
     def chat_disconnection_callback(self):
-        """Callback used when a socket connection is closed. If bot is not stopped we must retry connection"""
-
         if self.connection_status != CONNECTION_STATUS["DISCONNECTED"] and self.bot_status != BOT_STATUS["STOPPED"]:
             self._socket_error = datetime.now()
             self.connection_status = CONNECTION_STATUS["SOCKET_ERROR"]
 
     def chat_connection_error_callback(self):
-        """Callback used when a socket connection failed"""
-
         self._socket_error = datetime.now()
         self.connection_status = CONNECTION_STATUS["SOCKET_ERROR"]
 
     def poke_spawn_callback(self, chat_message):
-        """Callback used when a pokemon spawn is detected in chat"""
-
         if self.bot_status != BOT_STATUS["STOPPED"]:
             self.LogicDealer.investigate_last_spawn(self.bot_status, chat_message)
 
     def poke_data_update_callback(self):
-        """Callback used to sync GUI pokemon data with fetched from server"""
-        # This is called from a background thread, so we must EMIT a signal
-        # to update the UI on the main thread.
-        # print("Pokemon data updated (Background).") 
         self.pokemon_data_updated_signal.emit()
 
     def _on_pokemon_data_updated_slot(self):
-        """Slot to update UI on Main Thread"""
         print("Pokemon data updated (Main Thread).")
         
-        # Always update data if we have it, regardless of connection status flag.
-        # This prevents UI staleness if the status flag lags behind.
         self.HomePage.update_pokemon_data(dumps({
             "captured": self.PokemonData.captured,
             "pokedex": self.PokemonData.pokedex,
@@ -354,41 +298,31 @@ class MainApplication(QWidget):
         }))
 
     def poke_data_error_callback(self, error_code=None):
-        """Callback when a request to pokemon API returns error."""
         print(f"Error fetching Pokemon Data (Code: {error_code}).")
         
-        # Handle Token Expiration
         if error_code == -24 or error_code == 401:
              print("Token Expired or Invalid. Triggering Refresh...")
-             # Avoid recursion: Check if we are already getting JWT
              if self.connection_status != CONNECTION_STATUS["GETTING_JWT"]:
                  self._get_twitch_jwt()
              else:
                  print("Already refreshing JWT. Ignoring error.")
 
     def last_spawn_data_callback(self, spawn_data):
-        """Callback used to sync GUI last spawn data with detected from logic"""
-
         self.HomePage.update_last_spawn(dumps(spawn_data))
 
-    ### GUI Callbacks ###
-
     def on_home_load_callback(self):
-        """Callback used on home page load to update its store"""
-
         self.HomePage.update_connection_status(self.connection_status)
         self.HomePage.update_bot_status(self.bot_status)
         self.HomePage.update_language(self.LogicConfig.language)
+        self.HomePage.update_theme(self.LogicConfig.theme)
         self.HomePage.update_joined_chat(self.LogicConfig.channel)
         if self.user_data is not None:
             self.HomePage.update_username(self.user_data.username)
 
-        self._start_main_worker()
-
-        # self.AlertPage.open() # Disabled per user request
-
     def on_home_close_callback(self):
-        """Callback used on home page close to finish app"""
+        self._is_running = False
+        if self._main_task:
+             self._main_task.cancel()
 
         self.HomePage.close()
         self.ConfigPage.close()
@@ -397,15 +331,12 @@ class MainApplication(QWidget):
         self.TwitchSocketManager.disconnect()
 
     def on_alert_load_callback(self):
-        """Callback used on alert page load to update its store"""
-
         self.AlertPage.update_language(self.LogicConfig.language)
 
     def on_config_load_callback(self):
-        """Callback used on config page load to update its store"""
-
         self.ConfigPage.update_config_data(dumps({
             "language": self.LogicConfig.language,
+            "theme": self.LogicConfig.theme,
             "channel": self.LogicConfig.channel,
             "shop": self.LogicConfig.shop,
             "catch": self.LogicConfig.catch,
@@ -413,12 +344,8 @@ class MainApplication(QWidget):
         }))
 
     def save_config_callback(self, new_config):
-        """Callback used when user saves new settings in config page"""
-
         self.LogicConfig.update(new_config)
         self.on_config_load_callback()
-
-    ### Properties ###
 
     @property
     def connection_status(self):

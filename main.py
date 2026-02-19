@@ -1,4 +1,7 @@
 import sys
+import os
+import asyncio
+import qasync
 from os import path
 from dotenv import load_dotenv
 
@@ -8,7 +11,6 @@ from PyQt6.QtWebEngineCore import QWebEngineUrlScheme
 from PyQt6.QtWidgets import QApplication
 
 from src.MainApplication.index import MainApplication
-import os
 
 # Fix for Wayland/GPU issues
 os.environ["QT_QPA_PLATFORM"] = "xcb"
@@ -33,6 +35,15 @@ def get_program_path(main_file):
     return application_path
 
 
+async def main():
+    program_path = get_program_path(__file__)
+    core_app = MainApplication(program_path)
+    
+    # We await the core_app so the event loop stays alive
+    # We will need to implement a run/shutdown method in MainApplication
+    await core_app.run()
+
+
 if __name__ == "__main__":
 
     sys.excepthook = except_hook
@@ -40,8 +51,14 @@ if __name__ == "__main__":
     scheme = QWebEngineUrlScheme(b"qt")
     QWebEngineUrlScheme.registerScheme(scheme)
 
-    program_path = get_program_path(__file__)
-
     app = QApplication(sys.argv)
-    core_app = MainApplication(program_path)
-    sys.exit(app.exec())
+    
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.close()

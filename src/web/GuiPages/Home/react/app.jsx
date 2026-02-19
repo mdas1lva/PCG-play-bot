@@ -1,12 +1,14 @@
 const HomePage = () => {
 
+    const theme = ReactRedux.useSelector(state => state.theme);
+
     return (
-        <div id={"outer-container"}>
+        <div id={"outer-container"} data-theme={theme || "mocha"}>
             <div id={"center-container"}>
 
-                <Header/>
-                <Body/>
-                <Footer/>
+                <Header />
+                <Body />
+                <Footer />
 
             </div>
         </div>
@@ -16,7 +18,7 @@ const HomePage = () => {
 
 ReactDOM.render(
     <ReactRedux.Provider store={store}>
-        <HomePage/>
+        <HomePage />
     </ReactRedux.Provider>,
     document.getElementById("root")
 );

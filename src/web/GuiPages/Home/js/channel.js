@@ -11,6 +11,10 @@ const runSetLanguage = (language) => {
     store.dispatch(setLanguage(language));
 };
 
+const runSetTheme = (theme) => {
+    store.dispatch(setTheme(theme));
+};
+
 const runSetUsername = (username) => {
     store.dispatch(setUsername(username));
 };

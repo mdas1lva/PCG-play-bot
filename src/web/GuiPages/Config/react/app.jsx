@@ -25,6 +25,12 @@ const ConfigPage = () => {
         })
     }
 
+    const handleChangeTheme = (newValue) => {
+        setConfigState(config => {
+            return { ...config, theme: newValue }
+        })
+    }
+
     const handleChangeChannel = (newValue) => {
         setConfigState(config => {
             return { ...config, channel: newValue }
@@ -56,7 +62,7 @@ const ConfigPage = () => {
     }
 
     return (
-        <div id={"outer-container"}>
+        <div id={"outer-container"} data-theme={configState?.theme || "mocha"}>
 
             <p id={"page-title"}>{language.PAGE_TITLE}</p>
 
@@ -73,6 +79,7 @@ const ConfigPage = () => {
 
             <LanguageAndChannel
                 languageConfig={configState.language} setLanguageConfig={handleChangeLanguage}
+                themeConfig={configState.theme} setThemeConfig={handleChangeTheme}
                 channel={configState.channel} setChannel={handleChangeChannel}
             />
 
