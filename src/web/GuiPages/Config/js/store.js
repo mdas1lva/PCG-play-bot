@@ -70,7 +70,7 @@ const counterReducer = (state = initialState, action) => {
                     ...state.config, // Keep existing defaults
                     ...action.payload, // Overwrite with loaded config
                     "catch": Object.entries(action.payload.catch).reduce((acc, [tier, list]) => {
-                        acc[tier] = list.sort();
+                        acc[tier] = Array.isArray(list) ? list.sort() : list;
                         return acc;
                     }, {}),
                     "discord": {

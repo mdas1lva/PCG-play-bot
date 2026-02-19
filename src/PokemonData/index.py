@@ -56,6 +56,11 @@ class PokemonData:
             "spawn_count": 0,
             "spawn_progress": 0,
         }
+        
+        self._buddy_details_cache = {
+             "pokedex_id": None,
+             "data": None
+        }
 
     def update_poke_jwt(self, new_value):
         """Updates instance's pokemon API JWT to fetch requests"""
@@ -79,7 +84,7 @@ class PokemonData:
 
         print("Updating pokemon data (Active Signed Fetch)...")
 
-        captured = handle_captured_data(self._fetch_api_data("pokemon/v2/"), self.get_pokemon_data)
+        captured = handle_captured_data(self._fetch_api_data("pokemon/v2/"), self.get_pokemon_data, self._buddy_details_cache)
         self._captured = captured if captured is not None else self._captured
 
         inventory = handle_inventory_data(self._fetch_api_data("inventory/v3/"))
@@ -187,7 +192,7 @@ class PokemonData:
         
         if "pokemon/v2" in url:
             print("Captured Passive: Pokemon List")
-            captured = handle_captured_data(json_data, self.get_pokemon_data)
+            captured = handle_captured_data(json_data, self.get_pokemon_data, self._buddy_details_cache)
             self._captured = captured if captured is not None else self._captured
             self._data_update_callback()
             
@@ -216,27 +221,33 @@ class PokemonData:
         if self._captured and "all_pokemon_raw" in self._captured:
             for p in self._captured["all_pokemon_raw"]:
                 if p["pokedexId"] == pokedex_id:
-                    # Found it! Return formatted data
-                    def get_pokemon_types(type1, type2):
-                        types = [type1, type2]
-                        return list(filter(lambda x: x != "none" and x is not None, types))
-                        
-                    return {
-                        "pokedex_id": p["pokedexId"],
-                        "name": p["name"],
-                        "weight": 0, # Weight might not be in the summary list? User said it was.
-                        # User snippet: { id:..., name:..., pokedexId:..., ... }
-                        # It doesn't show 'type1'/'type2' in the snippet?
-                        # It has 'baseStats'.
-                        # If keys are missing, we default.
-                        "types": ["normal"], # Types might be missing in summary
-                        "tier": "A", # Tier missing in summary?
-                        "base_stats": p.get("baseStats", 0),
-                        "base_hp": p.get("hp", 0),
-                        "base_speed": p.get("speed", 0),
-                    }
+                    # Found it! Return formatted data ONLY if we have minimal data
+                    # User requested to abort if Tier is missing.
+                    # If tier is missing in cache, we should try to FETCH it.
+                    # So we only return here if we have what we need.
                     
-        # 2. If not found locally, try fetch (for new pokemon)
+                    if "tier" in p:
+                        def get_pokemon_types(type1, type2):
+                            types = [type1, type2]
+                            return list(filter(lambda x: x != "none" and x is not None, types))
+                            
+                        return {
+                            "pokedex_id": p["pokedexId"],
+                            "name": p["name"],
+                            "weight": p.get("weight", 0), 
+                            "types": get_pokemon_types(p.get("type1"), p.get("type2")), 
+                            "tier": p["tier"], 
+                            "base_stats": p.get("baseStats", 0),
+                            "base_hp": p.get("hp", 0),
+                            "base_speed": p.get("speed", 0),
+                        }
+                    else:
+                        # Cached data is incomplete (missing tier). 
+                        # Fall through to Fetch to get complete data.
+                        print(f"Cached data for {p['name']} is missing Tier. Attempting to fetch...")
+                        break 
+                    
+        # 2. If not found locally (or incomplete), try fetch (for new pokemon)
         try:
              # Using the correct endpoint provided by user
              url_endpoint = f"pokedex/info/v2/?pokedex_id={pokedex_id}"
@@ -248,24 +259,16 @@ class PokemonData:
                  # print(f"Verified: Successfully fetched signed data for ID {pokedex_id}.")
                  return handle_pokemon_data(data)
              else:
-                pass # Fallback to blind catch
+                pass # Fallback to abort
 
         except Exception as e:
              print(f"Error fetching signed data: {e}")
              pass
              
-        # 3. Fallback (Blind Catch Mode)
-        print(f"Warning: Could not fetch details for ID {pokedex_id}. Treating as New/Unknown.")
-        return {
-            "pokedex_id": pokedex_id,
-            "name": "Unknown",
-            "weight": 0,
-            "types": ["unknown"],
-            "tier": "S", # Create urgency to catch unknown things
-            "base_stats": 0,
-            "base_hp": 0,
-            "base_speed": 0
-        }
+        # 3. Fallback (Abort Mode)
+        # User requested to abort if data is missing so we can fix it.
+        print(f"Critical Error: Could not fetch details for ID {pokedex_id}. Aborting catch attempt.")
+        return None
 
     def check_inventory(self, item_name):
         """Checks if item exists in inventory"""
@@ -330,7 +333,7 @@ def get_last_spawn_data_static():
         return None
 
 # Helpers
-def handle_captured_data(server_data, get_pokemon_data):
+def handle_captured_data(server_data, get_pokemon_data, buddy_cache=None):
     """Treats fetched captured pokemon data"""
 
     if server_data is None:
@@ -355,7 +358,18 @@ def handle_captured_data(server_data, get_pokemon_data):
             data["shiny_count"] = data["shiny_count"] + 1
 
         if pokemon.get("isBuddy", False):
-            buddy_data = get_pokemon_data(pokemon["pokedexId"])
+            buddy_data = None
+            # Check cache if available
+            if buddy_cache and buddy_cache.get("pokedex_id") == pokemon["pokedexId"] and buddy_cache.get("data"):
+                 buddy_data = buddy_cache["data"]
+            else:
+                 # Not cached or changed, fetch logic (via helper)
+                 buddy_data = get_pokemon_data(pokemon["pokedexId"])
+                 # Update cache
+                 if buddy_cache is not None and buddy_data is not None:
+                     buddy_cache["pokedex_id"] = pokemon["pokedexId"]
+                     buddy_cache["data"] = buddy_data
+
             if buddy_data is not None:
                 data["buddy_types"] = buddy_data["types"]
 
@@ -476,7 +490,7 @@ def handle_pokemon_data(server_data):
 
     def get_pokemon_types(type1, type2):
         types = [type1, type2]
-        return list(filter(lambda x: x != "none", types))
+        return list(filter(lambda x: x != "none" and x is not None, types))
 
     data = {
         "pokedex_id": server_data["content"]["pokedex_id"],

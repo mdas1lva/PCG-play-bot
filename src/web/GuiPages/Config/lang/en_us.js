@@ -55,7 +55,9 @@ const LANG_EN_US = {
             "stats_ball": "Balls based on the pokemon's stats. Ex: heavy ball, fast ball.",
             "timers_ball": "Time-based balls: timer ball and quick ball.",
         },
-        PRIORITY: "Priority order"
+        PRIORITY: "Priority order",
+        TREAT_UNCAPT_AS_CAPT: "Treat uncaptured as captured",
+        TREAT_UNCAPT_AS_CAPT_HELP: "If checked, new pokemons will use the same ball logic as captured ones based on their tier.",
     },
 
     // Stats balls

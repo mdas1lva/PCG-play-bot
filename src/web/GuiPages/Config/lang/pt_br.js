@@ -55,7 +55,9 @@ const LANG_PT_BR = {
             "stats_ball": "Bolas baseadas nos status do pokemon. Ex: heavy ball, fast ball.",
             "timers_ball": "Bolas baseadas em tempo: timer ball e quick ball",
         },
-        PRIORITY: "Ordem de prioridade"
+        PRIORITY: "Ordem de prioridade",
+        TREAT_UNCAPT_AS_CAPT: "Tratar não capturados como capturados",
+        TREAT_UNCAPT_AS_CAPT_HELP: "Se marcado, novos pokemons usarão a mesma lógica de bolas que os já capturados baseada em seu tier.",
     },
 
     // Stats balls

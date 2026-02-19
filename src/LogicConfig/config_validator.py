@@ -1,20 +1,35 @@
 from assets.const.pokemon_data import POKE_BALLS_LIST
 
 
-without_repeat_balls_list = [ball for ball in POKE_BALLS_LIST if ball != "repeat_ball"]
+# Optimal Economic Defaults
+# S: Everything (Catch at all costs)
+uncapt_S_default = [b for b in POKE_BALLS_LIST if b != "repeat_ball"]
+S_default = POKE_BALLS_LIST
 
-uncapt_M_default_balls = [ball for ball in without_repeat_balls_list if ball != "master_ball"]
-M_default_balls = [ball for ball in POKE_BALLS_LIST if ball != "master_ball"]
+# A: High Value, but maybe save Master. Use Ultra/Specials.
+# Economy: Avoid waste, but A tier is valuable.
+A_balls = ["ultra_ball", "great_ball", "timer_ball", "quick_ball", 
+           "level_ball", "lure_ball", "moon_ball", "friend_ball", "love_ball", "fast_ball", "heavy_ball", 
+           "net_ball", "dive_ball", "nest_ball", "repeat_ball", "dusk_ball", "luxury_ball", "premier_ball"]
+uncapt_A_default = [b for b in A_balls if b != "repeat_ball"]
+A_default = A_balls
 
-uncapt_A_default_balls = uncapt_M_default_balls
-A_default_balls = M_default_balls
+# B: Medium Value. Great Ball is workhorse. Ultra if needed.
+# Economy: Prefer Great Ball (Cost 600) over Ultra (1000) unless necessary.
+B_balls = ["great_ball", "timer_ball", "quick_ball", "net_ball", "dive_ball", "dusk_ball", "nest_ball", "repeat_ball"]
+uncapt_B_default = [b for b in B_balls if b != "repeat_ball"] + ["ultra_ball"] # Boost for new entry
+B_default = B_balls
 
-uncapt_B_default_balls = [ball for ball in uncapt_A_default_balls
-                          if ball not in ["types_ball", "stats_ball", "ultra_ball"]]
-B_default_balls = [ball for ball in A_default_balls if ball not in ["types_ball", "stats_ball", "ultra_ball"]]
+# C: Low Value. Poke Ball only mostly.
+# LogicDealer already restricts Great Ball usage for C tier based on cash.
+C_balls = ["poke_ball", "great_ball", "premier_ball"]
+uncapt_C_default = ["poke_ball", "great_ball", "premier_ball", "timer_ball", "quick_ball"] # Boost for new entry
+C_default = C_balls
 
-uncapt_C_default_balls = ["stone_ball", "poke_ball"]
-C_default_balls = ["stone_ball", "poke_ball"]
+# M (Mission): Catch based on requirement, but usually any ball fails if not matched.
+# Safest is to allow all except Master.
+M_default = [b for b in POKE_BALLS_LIST if b != "master_ball"]
+uncapt_M_default = [b for b in M_default if b != "repeat_ball"]
 
 
 config_validator = {
@@ -73,44 +88,48 @@ config_validator = {
         },
     },
     "catch": {
+        "treat_uncapt_as_capt": {
+            "default": False,
+            "validator": {"type": "bool"}
+        },
         "uncapt_S": {
-            "default": without_repeat_balls_list,
-            "validator": {"type": "str_list", "accepted_values": without_repeat_balls_list}
+            "default": uncapt_S_default,
+            "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "S": {
-            "default": POKE_BALLS_LIST,
+            "default": S_default,
             "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "uncapt_M": {
-            "default": uncapt_M_default_balls,
-            "validator": {"type": "str_list", "accepted_values": without_repeat_balls_list}
+            "default": uncapt_M_default,
+            "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "M": {
-            "default": M_default_balls,
+            "default": M_default,
             "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "uncapt_A": {
-            "default": uncapt_A_default_balls,
-            "validator": {"type": "str_list", "accepted_values": without_repeat_balls_list}
+            "default": uncapt_A_default,
+            "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "A": {
-            "default": A_default_balls,
+            "default": A_default,
             "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "uncapt_B": {
-            "default": uncapt_B_default_balls,
-            "validator": {"type": "str_list", "accepted_values": without_repeat_balls_list}
+            "default": uncapt_B_default,
+            "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "B": {
-            "default": B_default_balls,
+            "default": B_default,
             "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "uncapt_C": {
-            "default": uncapt_C_default_balls,
-            "validator": {"type": "str_list", "accepted_values": without_repeat_balls_list}
+            "default": uncapt_C_default,
+            "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
         "C": {
-            "default": C_default_balls,
+            "default": C_default,
             "validator": {"type": "str_list", "accepted_values": POKE_BALLS_LIST}
         },
     },

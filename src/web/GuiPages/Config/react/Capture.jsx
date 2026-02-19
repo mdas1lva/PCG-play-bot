@@ -5,7 +5,7 @@ const POKE_BALLS_LIST = [
 ]
 
 
-const Capture = ({catchConfig, setCatchConfig}) => {
+const Capture = ({ catchConfig, setCatchConfig }) => {
 
     const language = useLanguage()
     const captureText = language.CAPTURE
@@ -38,86 +38,112 @@ const Capture = ({catchConfig, setCatchConfig}) => {
         });
     };
 
-    return TIERS.map(tier => {
+    const handleToggleTreatUncapt = () => {
+        setCatchConfig({
+            ...catchConfig,
+            treat_uncapt_as_capt: !catchConfig.treat_uncapt_as_capt
+        });
+    };
 
-        return (
-            <div className={"category-container"} key={tier}>
-
+    return (
+        <React.Fragment>
+            <div className={"category-container"}>
                 <div className={"category-title-container"}>
-                    <span className={"category-title"}>{captureText[tier].LABEL}</span>
-                    <div className={"tooltip-container"} tooltip={captureText[tier].HELP}/>
-                    <button className={"show-hide-button"} onClick={() => handleToggleShow(tier)}>
-                        <div className={`triangle ${showDivStates[tier] ? "collapse" : "expand"}`}/>
-                    </button>
+                    <label className={"category-title"} style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                        <input
+                            type="checkbox"
+                            checked={catchConfig.treat_uncapt_as_capt || false}
+                            onChange={handleToggleTreatUncapt}
+                            style={{ marginRight: "10px", width: "18px", height: "18px" }}
+                        />
+                        {captureText.TREAT_UNCAPT_AS_CAPT}
+                    </label>
+                    <div className={"tooltip-container"} tooltip={captureText.TREAT_UNCAPT_AS_CAPT_HELP} />
                 </div>
+            </div>
 
-                <CollapsibleDiv showDiv={showDivStates[tier]}>
+            {TIERS.map(tier => {
 
-                    <div className={`collapsible-content-container capture-content-container capture-${tier}`}>
+                return (
+                    <div className={"category-container"} key={tier}>
 
-                        <div>
+                        <div className={"category-title-container"}>
+                            <span className={"category-title"}>{captureText[tier].LABEL}</span>
+                            <div className={"tooltip-container"} tooltip={captureText[tier].HELP} />
+                            <button className={"show-hide-button"} onClick={() => handleToggleShow(tier)}>
+                                <div className={`triangle ${showDivStates[tier] ? "collapse" : "expand"}`} />
+                            </button>
+                        </div>
 
-                            <div className={"capture-item-container"}>
+                        <CollapsibleDiv showDiv={showDivStates[tier]}>
 
-                                <div className={"capture-label-title"}/>
+                            <div className={`collapsible-content-container capture-content-container capture-${tier}`}>
 
-                                <label className={"capture-checkbox-label label-text"}>
-                                    <span>{captureText.NEW}</span>
-                                    <div className={"tooltip-container"} tooltip={captureText.NEW_HELP}/>
-                                </label>
+                                <div>
 
-                                <label className={"capture-checkbox-label label-text"}>
-                                    <span>{captureText.REPEATED}</span>
-                                    <div className={"tooltip-container"} tooltip={captureText.REPEATED_HELP}/>
-                                </label>
+                                    <div className={"capture-item-container"}>
 
-                            </div>
+                                        <div className={"capture-label-title"} />
 
-                            {POKE_BALLS_LIST.map(itemName => (
+                                        <label className={"capture-checkbox-label label-text"}>
+                                            <span>{captureText.NEW}</span>
+                                            <div className={"tooltip-container"} tooltip={captureText.NEW_HELP} />
+                                        </label>
 
-                                <div key={itemName} className={"capture-item-container"}>
+                                        <label className={"capture-checkbox-label label-text"}>
+                                            <span>{captureText.REPEATED}</span>
+                                            <div className={"tooltip-container"} tooltip={captureText.REPEATED_HELP} />
+                                        </label>
 
-                                    <label className={"label-title capture-label-title"}>
-                                        <span>{reformatBallName(itemName)}</span>
-                                        {captureText.POKEBALLS_HELP[itemName] != null &&
-                                        <div className={"tooltip-container"}
-                                             tooltip={captureText.POKEBALLS_HELP[itemName]}/>
-                                        }
-                                    </label>
+                                    </div>
 
-                                    <label className={"capture-checkbox-label"}>
-                                        <input
-                                            type="checkbox"
-                                            checked={catchConfig[`uncapt_${tier}`].includes(itemName) && itemName !== "nest_ball"}
-                                            onChange={() => handleSetBall(`uncapt_${tier}`, itemName)}
-                                            disabled={itemName === "nest_ball" || itemName === "repeat_ball"}
-                                        />
-                                    </label>
+                                    {POKE_BALLS_LIST.map(itemName => (
 
-                                    <label className={"capture-checkbox-label"}>
-                                        <input
-                                            type="checkbox"
-                                            checked={catchConfig[tier].includes(itemName) && itemName !== "nest_ball"}
-                                            onChange={() => handleSetBall(tier, itemName)}
-                                            disabled={itemName === "nest_ball"}
-                                        />
-                                    </label>
+                                        <div key={itemName} className={"capture-item-container"}>
+
+                                            <label className={"label-title capture-label-title"}>
+                                                <span>{reformatBallName(itemName)}</span>
+                                                {captureText.POKEBALLS_HELP[itemName] != null &&
+                                                    <div className={"tooltip-container"}
+                                                        tooltip={captureText.POKEBALLS_HELP[itemName]} />
+                                                }
+                                            </label>
+
+                                            <label className={"capture-checkbox-label"}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={catchConfig[`uncapt_${tier}`].includes(itemName) && itemName !== "nest_ball"}
+                                                    onChange={() => handleSetBall(`uncapt_${tier}`, itemName)}
+                                                    disabled={itemName === "nest_ball" || itemName === "repeat_ball"}
+                                                />
+                                            </label>
+
+                                            <label className={"capture-checkbox-label"}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={catchConfig[tier].includes(itemName) && itemName !== "nest_ball"}
+                                                    onChange={() => handleSetBall(tier, itemName)}
+                                                    disabled={itemName === "nest_ball"}
+                                                />
+                                            </label>
+
+                                        </div>
+
+                                    ))}
 
                                 </div>
 
-                            ))}
+                                <div>
+                                    <span className={"priority-text"}>&darr; {captureText.PRIORITY} &darr;</span>
+                                </div>
 
-                        </div>
+                            </div>
 
-                        <div>
-                            <span className={"priority-text"}>&darr; {captureText.PRIORITY} &darr;</span>
-                        </div>
+                        </CollapsibleDiv>
 
                     </div>
-
-                </CollapsibleDiv>
-
-            </div>
-        );
-    })
+                );
+            })}
+        </React.Fragment>
+    );
 };
